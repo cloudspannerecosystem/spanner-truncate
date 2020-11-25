@@ -1,5 +1,6 @@
 spanner-truncate
 ===
+[![CircleCI](https://circleci.com/gh/cloudspannerecosystem/spanner-truncate.svg?style=svg)](https://circleci.com/gh/cloudspannerecosystem/spanner-truncate)
 
 ## Overview
 
