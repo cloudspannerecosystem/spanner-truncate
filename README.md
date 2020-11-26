@@ -38,7 +38,7 @@ To solve the preceding issues, this tool works as follows.
 ## Install
 
 ```
-go get -u github.com/cloudspannerecosystem/spanner-truncate
+GO111MODULE=on go get github.com/cloudspannerecosystem/spanner-truncate
 ```
 
 ## How to use
