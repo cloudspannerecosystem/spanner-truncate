@@ -61,7 +61,7 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 
 	truncateAll := true
 	targets := make(map[string]bool, len(targetTables))
-	if len(targets) > 0 {
+	if len(targetTables) > 0 {
 		truncateAll = false
 		for _, t := range targetTables {
 			targets[t] = true
