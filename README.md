@@ -52,6 +52,7 @@ Application Options:
   -i, --instance= (required) Cloud Spanner Instance ID.
   -d, --database= (required) Cloud Spanner Database ID.
   -q, --quiet     Disable all interactive prompts.
+  -t, --target=   Table names to be deleted.
 
 Help Options:
   -h, --help      Show this help message

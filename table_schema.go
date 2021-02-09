@@ -42,9 +42,9 @@ type tableSchema struct {
 	referencedBy []string
 }
 
-func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSchema, error) {
+func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
-	iter := client.Single().Query(ctx, spanner.NewStatement(`
+	sql := `
 		WITH FKReferences AS (
 			SELECT CCU.TABLE_NAME AS Referenced, ARRAY_AGG(TC.TABLE_NAME) AS Referencing
 			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS as TC
@@ -56,8 +56,18 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSch
 		FROM INFORMATION_SCHEMA.TABLES AS T
 		LEFT OUTER JOIN FKReferences AS F ON T.TABLE_NAME = F.Referenced
 		WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = ""
-		ORDER BY T.TABLE_NAME ASC
-	`))
+`
+	var params map[string]interface{}
+	if len(targetTables) > 0 {
+		sql += " AND T.TABLE_NAME IN UNNEST(@TargetTables) "
+		params = map[string]interface{}{"TargetTables": targetTables}
+	}
+	sql += " ORDER BY T.TABLE_NAME ASC"
+	stmt := spanner.Statement{
+		SQL:    sql,
+		Params: params,
+	}
+	iter := client.Single().Query(ctx, stmt)
 
 	var tables []*tableSchema
 	if err := iter.Do(func(r *spanner.Row) error {
