@@ -44,7 +44,7 @@ type tableSchema struct {
 
 func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
-	sql := `
+	iter := client.Single().Query(ctx, spanner.NewStatement(`
 		WITH FKReferences AS (
 			SELECT CCU.TABLE_NAME AS Referenced, ARRAY_AGG(TC.TABLE_NAME) AS Referencing
 			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS as TC
@@ -56,18 +56,17 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		FROM INFORMATION_SCHEMA.TABLES AS T
 		LEFT OUTER JOIN FKReferences AS F ON T.TABLE_NAME = F.Referenced
 		WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = ""
-`
-	var params map[string]interface{}
-	if len(targetTables) > 0 {
-		sql += " AND T.TABLE_NAME IN UNNEST(@TargetTables) "
-		params = map[string]interface{}{"TargetTables": targetTables}
+		ORDER BY T.TABLE_NAME ASC
+	`))
+
+	truncateAll := true
+	targets := make(map[string]bool, len(targetTables))
+	if len(targets) > 0 {
+		truncateAll = false
+		for _, t := range targetTables {
+			targets[t] = true
+		}
 	}
-	sql += " ORDER BY T.TABLE_NAME ASC"
-	stmt := spanner.Statement{
-		SQL:    sql,
-		Params: params,
-	}
-	iter := client.Single().Query(ctx, stmt)
 
 	var tables []*tableSchema
 	if err := iter.Do(func(r *spanner.Row) error {
@@ -79,6 +78,12 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		)
 		if err := r.Columns(&tableName, &parent, &deleteAction, &referencedBy); err != nil {
 			return err
+		}
+
+		if !truncateAll {
+			if _, ok := targets[tableName]; !ok {
+				return nil
+			}
 		}
 
 		var parentTableName string
