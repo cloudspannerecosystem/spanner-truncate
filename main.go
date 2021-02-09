@@ -37,7 +37,7 @@ type options struct {
 	InstanceID string `short:"i" long:"instance" description:"(required) Cloud Spanner Instance ID."`
 	DatabaseID string `short:"d" long:"database" description:"(required) Cloud Spanner Database ID."`
 	Quiet      bool   `short:"q" long:"quiet" description:"Disable all interactive prompts."`
-	Target     string `short:"t" long:"target" description:"Comma separated table names to be deleted."`
+	Tables     string `short:"t" long:"tables" description:"Comma separated table names to be truncated. Default to truncate all tables if not specified."`
 }
 
 const maxTimeout = time.Hour * 24
@@ -53,8 +53,8 @@ func main() {
 	}
 
 	var targetTables []string
-	if opts.Target != "" {
-		targetTables = strings.Split(opts.Target, ",")
+	if opts.Tables != "" {
+		targetTables = strings.Split(opts.Tables, ",")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
