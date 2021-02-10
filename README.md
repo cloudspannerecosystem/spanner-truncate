@@ -52,6 +52,7 @@ Application Options:
   -i, --instance= (required) Cloud Spanner Instance ID.
   -d, --database= (required) Cloud Spanner Database ID.
   -q, --quiet     Disable all interactive prompts.
+  -t, --tables=   Comma separated table names to be truncated. Default to truncate all tables if not specified.
 
 Help Options:
   -h, --help      Show this help message

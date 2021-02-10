@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/spanner"
@@ -36,6 +37,7 @@ type options struct {
 	InstanceID string `short:"i" long:"instance" description:"(required) Cloud Spanner Instance ID."`
 	DatabaseID string `short:"d" long:"database" description:"(required) Cloud Spanner Database ID."`
 	Quiet      bool   `short:"q" long:"quiet" description:"Disable all interactive prompts."`
+	Tables     string `short:"t" long:"tables" description:"Comma separated table names to be truncated. Default to truncate all tables if not specified."`
 }
 
 const maxTimeout = time.Hour * 24
@@ -50,16 +52,21 @@ func main() {
 		exitf("Missing options: -p, -i, -d are required.\n")
 	}
 
+	var targetTables []string
+	if opts.Tables != "" {
+		targetTables = strings.Split(opts.Tables, ",")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer cancel()
 	go handleInterrupt(cancel)
 
-	if err := run(ctx, opts.ProjectID, opts.InstanceID, opts.DatabaseID, opts.Quiet, os.Stdout); err != nil {
+	if err := run(ctx, opts.ProjectID, opts.InstanceID, opts.DatabaseID, opts.Quiet, os.Stdout, targetTables); err != nil {
 		exitf("ERROR: %s", err.Error())
 	}
 }
 
-func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer) error {
+func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer, targetTables []string) error {
 	database := fmt.Sprintf("projects/%s/instances/%s/databases/%s", projectID, instanceID, databaseID)
 
 	client, err := spanner.NewClient(ctx, database)
@@ -68,7 +75,7 @@ func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 	}
 
 	fmt.Fprintf(out, "Fetching table schema from %s\n", database)
-	schemas, err := fetchTableSchemas(ctx, client)
+	schemas, err := fetchTableSchemas(ctx, client, targetTables)
 	if err != nil {
 		return fmt.Errorf("failed to fetch table schema: %v", err)
 	}

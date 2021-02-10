@@ -42,7 +42,7 @@ type tableSchema struct {
 	referencedBy []string
 }
 
-func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSchema, error) {
+func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
 	iter := client.Single().Query(ctx, spanner.NewStatement(`
 		WITH FKReferences AS (
@@ -59,6 +59,15 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSch
 		ORDER BY T.TABLE_NAME ASC
 	`))
 
+	truncateAll := true
+	targets := make(map[string]bool, len(targetTables))
+	if len(targetTables) > 0 {
+		truncateAll = false
+		for _, t := range targetTables {
+			targets[t] = true
+		}
+	}
+
 	var tables []*tableSchema
 	if err := iter.Do(func(r *spanner.Row) error {
 		var (
@@ -69,6 +78,12 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSch
 		)
 		if err := r.Columns(&tableName, &parent, &deleteAction, &referencedBy); err != nil {
 			return err
+		}
+
+		if !truncateAll {
+			if _, ok := targets[tableName]; !ok {
+				return nil
+			}
 		}
 
 		var parentTableName string
