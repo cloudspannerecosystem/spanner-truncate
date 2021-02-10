@@ -197,7 +197,7 @@ func TestIntegrationTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open /dev/null: %v", err)
 	}
-	if err := run(ctx, testProjectID, testInstanceID, testDatabaseID, true, devNull); err != nil {
+	if err := run(ctx, testProjectID, testInstanceID, testDatabaseID, true, devNull, nil); err != nil {
 		t.Fatalf("run spanner-truncate failed: %v", err)
 	}
 
