@@ -55,7 +55,7 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		SELECT T.TABLE_NAME, T.PARENT_TABLE_NAME, T.ON_DELETE_ACTION, IF(F.Referencing IS NULL, ARRAY<STRING>[], F.Referencing) AS referencedBy
 		FROM INFORMATION_SCHEMA.TABLES AS T
 		LEFT OUTER JOIN FKReferences AS F ON T.TABLE_NAME = F.Referenced
-		WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = ""
+		WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = "" AND T.TABLE_TYPE = "BASE TABLE"
 		ORDER BY T.TABLE_NAME ASC
 	`))
 
