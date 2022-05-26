@@ -53,7 +53,7 @@ Application Options:
   -d, --database= (required) Cloud Spanner Database ID.
   -q, --quiet     Disable all interactive prompts.
   -t, --tables=   Comma separated table names to be truncated. Default to truncate all tables if not specified.
-
+  -w, --whitelist Comma separated table names to be exempted from truncating. 'tables' and 'whitelist' cannot co-exist.
 Help Options:
   -h, --help      Show this help message
 ```
