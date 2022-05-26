@@ -61,7 +61,7 @@ func main() {
 
 	if opts.ExcludeTables != "" {
 		if opts.Tables != "" {
-			exitf("Conflict: -t and -w cannot be both set.\n")
+			exitf("Conflict: --tables and --exclude-tables cannot be both set.\n")
 		}
 		excludeTables = strings.Split(opts.ExcludeTables, ",")
 	}
