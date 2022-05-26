@@ -1,4 +1,4 @@
-module github.com/cloudspannerecosystem/spanner-truncate
+module github.com/user3301/spanner-truncate
 
 go 1.14
 
