@@ -42,7 +42,7 @@ type tableSchema struct {
 	referencedBy []string
 }
 
-func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
+func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables, whitelistedTables []string) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
 	iter := client.Single().Query(ctx, spanner.NewStatement(`
 		WITH FKReferences AS (
@@ -61,7 +61,8 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 
 	truncateAll := true
 	targets := make(map[string]bool, len(targetTables))
-	if len(targetTables) > 0 {
+	whitelists := make(map[string]bool, len(whitelistedTables))
+	if len(targetTables) > 0 || len(whitelistedTables) > 0 {
 		truncateAll = false
 		for _, t := range targetTables {
 			targets[t] = true
@@ -81,6 +82,9 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		}
 
 		if !truncateAll {
+			if _, ok := whitelists[tableName]; ok {
+				return nil
+			}
 			if _, ok := targets[tableName]; !ok {
 				return nil
 			}

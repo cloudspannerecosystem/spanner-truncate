@@ -38,6 +38,7 @@ type options struct {
 	DatabaseID string `short:"d" long:"database" description:"(required) Cloud Spanner Database ID."`
 	Quiet      bool   `short:"q" long:"quiet" description:"Disable all interactive prompts."`
 	Tables     string `short:"t" long:"tables" description:"Comma separated table names to be truncated. Default to truncate all tables if not specified."`
+	Whitelist  string `short:"w" long:"whitelist" description:"Comma separated table names to be exempted from truncating. 'tables' and 'whitelist' cannot co-exist"`
 }
 
 const maxTimeout = time.Hour * 24
@@ -53,20 +54,30 @@ func main() {
 	}
 
 	var targetTables []string
+	var whitelistedTables []string
 	if opts.Tables != "" {
 		targetTables = strings.Split(opts.Tables, ",")
+	}
+
+	targetTables = append(targetTables, []string{"foo", "bar", "baz"}...)
+
+	if opts.Whitelist != "" {
+		if opts.Tables != "" {
+			exitf("Conflict: -t and -w cannot be both set.\n")
+		}
+		whitelistedTables = strings.Split(opts.Whitelist, ",")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
 	defer cancel()
 	go handleInterrupt(cancel)
 
-	if err := run(ctx, opts.ProjectID, opts.InstanceID, opts.DatabaseID, opts.Quiet, os.Stdout, targetTables); err != nil {
+	if err := run(ctx, opts.ProjectID, opts.InstanceID, opts.DatabaseID, opts.Quiet, os.Stdout, targetTables, whitelistedTables); err != nil {
 		exitf("ERROR: %s", err.Error())
 	}
 }
 
-func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer, targetTables []string) error {
+func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer, targetTables, whitelistedTables []string) error {
 	database := fmt.Sprintf("projects/%s/instances/%s/databases/%s", projectID, instanceID, databaseID)
 
 	client, err := spanner.NewClient(ctx, database)
@@ -76,7 +87,7 @@ func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 	defer client.Close()
 
 	fmt.Fprintf(out, "Fetching table schema from %s\n", database)
-	schemas, err := fetchTableSchemas(ctx, client, targetTables)
+	schemas, err := fetchTableSchemas(ctx, client, targetTables, whitelistedTables)
 	if err != nil {
 		return fmt.Errorf("failed to fetch table schema: %v", err)
 	}
