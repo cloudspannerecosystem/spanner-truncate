@@ -48,9 +48,9 @@ Usage:
   spanner-truncate [OPTIONS]
 
 Application Options:
-  -p, --project=  (required) GCP Project ID.
-  -i, --instance= (required) Cloud Spanner Instance ID.
-  -d, --database= (required) Cloud Spanner Database ID.
+  -p, --project=  (required) GCP Project ID. [$SPANNER_PROJECT_ID]
+  -i, --instance= (required) Cloud Spanner Instance ID. [$SPANNER_INSTANCE_ID]
+  -d, --database= (required) Cloud Spanner Database ID. [$SPANNER_DATABASE_ID]
   -q, --quiet     Disable all interactive prompts.
   -t, --tables=   Comma separated table names to be truncated. Default to truncate all tables if not specified.
   -e, --exclude-tables Comma separated table names to be exempted from truncating. 'tables' and 'exclude-tables' cannot co-exist.
