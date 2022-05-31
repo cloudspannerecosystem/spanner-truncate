@@ -33,9 +33,9 @@ import (
 )
 
 type options struct {
-	ProjectID     string `short:"p" long:"project" description:"(required) GCP Project ID."`
-	InstanceID    string `short:"i" long:"instance" description:"(required) Cloud Spanner Instance ID."`
-	DatabaseID    string `short:"d" long:"database" description:"(required) Cloud Spanner Database ID."`
+	ProjectID     string `short:"p" long:"project" env:"SPANNER_PROJECT_ID" description:"(required) GCP Project ID."`
+	InstanceID    string `short:"i" long:"instance" env:"SPANNER_INSTANCE_ID" description:"(required) Cloud Spanner Instance ID."`
+	DatabaseID    string `short:"d" long:"database" env:"SPANNER_DATABASE_ID" description:"(required) Cloud Spanner Database ID."`
 	Quiet         bool   `short:"q" long:"quiet" description:"Disable all interactive prompts."`
 	Tables        string `short:"t" long:"tables" description:"Comma separated table names to be truncated. Default to truncate all tables if not specified."`
 	ExcludeTables string `short:"e" long:"exclude-tables" description:"Comma separated table names to be exempted from truncating. 'tables' and 'exclude-tables' cannot co-exist"`
