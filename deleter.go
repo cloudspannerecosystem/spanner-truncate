@@ -73,7 +73,7 @@ func (d *deleter) startRowCountUpdater(ctx context.Context) {
 			d.updateRowCount(ctx)
 
 			// Sleep for a while to minimize the impact on CPU usage caused by SELECT COUNT(*) queries.
-			time.Sleep(5 time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}()
 }
