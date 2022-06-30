@@ -17,10 +17,11 @@
 package main
 
 import (
-	"cloud.google.com/go/spanner"
 	"context"
 	"errors"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // table is an element of the tree which represents inter-table relationships.
@@ -135,10 +136,21 @@ func newCoordinator(schemas []*tableSchema, client *spanner.Client) *coordinator
 	}
 
 	// Construct Parent-Child relationships.
-	tables = constructTableTree(tables, "") // root
+	topLevelTables := constructTableTree(tables, "")
+	for _, table := range tables {
+		if table.parentTableName == "" {
+			continue
+		}
+		// If parent table doesn't exist in the specified schema,
+		// regard this table as a top level table.
+		if _, ok := tableMap[table.parentTableName]; !ok {
+			ts := constructTableTree(tables, table.parentTableName)
+			topLevelTables = append(topLevelTables, ts...)
+		}
+	}
 
 	return &coordinator{
-		tables:  tables,
+		tables:  topLevelTables,
 		errChan: make(chan error),
 	}
 }

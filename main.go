@@ -82,7 +82,10 @@ func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 	if err != nil {
 		return fmt.Errorf("failed to create Cloud Spanner client: %v", err)
 	}
-	defer client.Close()
+	defer func() {
+		fmt.Fprintf(out, "Closing spanner client...\n")
+		client.Close()
+	}()
 
 	fmt.Fprintf(out, "Fetching table schema from %s\n", database)
 	schemas, err := fetchTableSchemas(ctx, client, targetTables, excludeTables)
