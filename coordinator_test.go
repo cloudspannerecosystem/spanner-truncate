@@ -61,6 +61,17 @@ func TestNewCoordinator(t *testing.T) {
 			},
 		},
 		{
+			desc: "Only child table specified in multiple tables",
+			schemas: []*tableSchema{
+				{tableName: "C", parentTableName: "B"},
+				{tableName: "D", parentTableName: "A"},
+			},
+			want: []*table{
+				{tableName: "C"},
+				{tableName: "D"},
+			},
+		},
+		{
 			desc: "Only child table specified in two levels",
 			schemas: []*tableSchema{
 				{tableName: "C", parentTableName: "B"},
