@@ -17,9 +17,93 @@
 package main
 
 import (
-	"github.com/google/go-cmp/cmp"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
+
+func TestNewCoordinator(t *testing.T) {
+	for _, test := range []struct {
+		desc    string
+		schemas []*tableSchema
+		want    []*table
+	}{
+		{
+			desc: "Flat",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: ""},
+			},
+			want: []*table{
+				{tableName: "A"},
+				{tableName: "B"},
+			},
+		},
+		{
+			desc: "Parent-child relationship",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: ""},
+				{tableName: "C", parentTableName: "B"},
+			},
+			want: []*table{
+				{tableName: "A"},
+				{tableName: "B", childTables: []*table{{tableName: "C"}}},
+			},
+		},
+		{
+			desc: "Only child table specified",
+			schemas: []*tableSchema{
+				{tableName: "C", parentTableName: "B"},
+			},
+			want: []*table{
+				{tableName: "C"},
+			},
+		},
+		{
+			desc: "Only child table specified in multiple tables",
+			schemas: []*tableSchema{
+				{tableName: "C", parentTableName: "B"},
+				{tableName: "D", parentTableName: "A"},
+			},
+			want: []*table{
+				{tableName: "C"},
+				{tableName: "D"},
+			},
+		},
+		{
+			desc: "Only child table specified in two levels",
+			schemas: []*tableSchema{
+				{tableName: "C", parentTableName: "B"},
+				{tableName: "D", parentTableName: "C"},
+			},
+			want: []*table{
+				{tableName: "C", childTables: []*table{{tableName: "D"}}},
+			},
+		},
+		{
+			desc: "Foreign Key reference",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: "", referencedBy: []string{}},
+				{tableName: "C", parentTableName: "", referencedBy: []string{"B"}},
+			},
+			want: []*table{
+				{tableName: "A"},
+				{tableName: "B"},
+				{tableName: "C", referencedBy: []*table{{tableName: "B"}}},
+			},
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			coordinator := newCoordinator(test.schemas, nil)
+			got := coordinator.tables
+			if !compareTables(got, test.want) {
+				t.Errorf("invalid tables: got = %#v, want = %#v", got, test.want)
+			}
+		})
+	}
+}
 
 func TestFindDeletableTables(t *testing.T) {
 	for _, tt := range []struct {
@@ -244,4 +328,24 @@ func extractTableNames(tables []*table) []string {
 		names[i] = table.tableName
 	}
 	return names
+}
+
+func compareTables(tables1, tables2 []*table) bool {
+	if len(tables1) != len(tables2) {
+		return false
+	}
+	for i := 0; i < len(tables1); i++ {
+		t1 := tables1[i]
+		t2 := tables2[i]
+		if t1.tableName != t2.tableName {
+			return false
+		}
+		if !compareTables(t1.childTables, t2.childTables) {
+			return false
+		}
+		if !compareTables(t1.referencedBy, t2.referencedBy) {
+			return false
+		}
+	}
+	return true
 }
