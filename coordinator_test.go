@@ -26,6 +26,7 @@ func TestNewCoordinator(t *testing.T) {
 	for _, test := range []struct {
 		desc    string
 		schemas []*tableSchema
+		indexes []*indexSchema
 		want    []*table
 	}{
 		{
@@ -34,6 +35,7 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "A", parentTableName: ""},
 				{tableName: "B", parentTableName: ""},
 			},
+			indexes: nil,
 			want: []*table{
 				{tableName: "A"},
 				{tableName: "B"},
@@ -46,6 +48,7 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "B", parentTableName: ""},
 				{tableName: "C", parentTableName: "B"},
 			},
+			indexes: nil,
 			want: []*table{
 				{tableName: "A"},
 				{tableName: "B", childTables: []*table{{tableName: "C"}}},
@@ -56,6 +59,7 @@ func TestNewCoordinator(t *testing.T) {
 			schemas: []*tableSchema{
 				{tableName: "C", parentTableName: "B"},
 			},
+			indexes: nil,
 			want: []*table{
 				{tableName: "C"},
 			},
@@ -66,6 +70,7 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "C", parentTableName: "B"},
 				{tableName: "D", parentTableName: "A"},
 			},
+			indexes: nil,
 			want: []*table{
 				{tableName: "C"},
 				{tableName: "D"},
@@ -77,6 +82,7 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "C", parentTableName: "B"},
 				{tableName: "D", parentTableName: "C"},
 			},
+			indexes: nil,
 			want: []*table{
 				{tableName: "C", childTables: []*table{{tableName: "D"}}},
 			},
@@ -88,15 +94,42 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "B", parentTableName: "", referencedBy: []string{}},
 				{tableName: "C", parentTableName: "", referencedBy: []string{"B"}},
 			},
+			indexes: nil,
 			want: []*table{
 				{tableName: "A"},
 				{tableName: "B"},
 				{tableName: "C", referencedBy: []*table{{tableName: "B"}}},
 			},
 		},
+		{
+			desc: "Child table has an interleaved index",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: "A"},
+			},
+			indexes: []*indexSchema{
+				{indexName: "Bi", baseTableName: "B", parentTableName: "B"},
+			},
+			want: []*table{
+				{tableName: "A", childTables: []*table{{tableName: "B"}}},
+			},
+		},
+		{
+			desc: "Child table has a global (non-interleaved) index",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: "A"},
+			},
+			indexes: []*indexSchema{
+				{indexName: "Bi", baseTableName: "B", parentTableName: "B"},
+			},
+			want: []*table{
+				{tableName: "A", childTables: []*table{{tableName: "B"}}},
+			},
+		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
-			coordinator := newCoordinator(test.schemas, nil)
+			coordinator := newCoordinator(test.schemas, test.indexes, nil)
 			got := coordinator.tables
 			if !compareTables(got, test.want) {
 				t.Errorf("invalid tables: got = %#v, want = %#v", got, test.want)
@@ -231,6 +264,56 @@ func TestFindDeletableTables(t *testing.T) {
 			},
 			want: []string{"C"},
 		},
+		{
+			desc: "Child table has a global index",
+			tablesFunc: func() []*table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{}}
+
+				tableA.childTables = []*table{tableB}
+				tableB.parentTableName = "A"
+				tableB.parentOnDeleteAction = deleteActionCascadeDelete
+
+				// Assuming that tableB has a global index
+				tableB.hasGlobalIndex = true
+
+				return []*table{tableA}
+			},
+			want: []string{"B"},
+		},
+		{
+			desc: "Child table has a global index, but already child was deleted",
+			tablesFunc: func() []*table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{status: statusCompleted}}
+
+				tableA.childTables = []*table{tableB}
+				tableB.parentTableName = "A"
+				tableB.parentOnDeleteAction = deleteActionCascadeDelete
+
+				tableB.hasGlobalIndex = true
+
+				return []*table{tableA}
+			},
+			want: []string{"A"},
+		},
+		{
+			desc: "Parent table has a global index",
+			tablesFunc: func() []*table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{}}
+
+				tableA.childTables = []*table{tableB}
+				tableB.parentTableName = "A"
+				tableB.parentOnDeleteAction = deleteActionCascadeDelete
+
+				// Assuming that tableA (parent table) has a global index.
+				tableA.hasGlobalIndex = true
+
+				return []*table{tableA}
+			},
+			want: []string{"A"}, // it shouldn't block parent deletion
+		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			got := findDeletableTables(tt.tablesFunc())
@@ -308,6 +391,28 @@ func TestTableIsDeletable(t *testing.T) {
 				tableA := &table{tableName: "A", deleter: &deleter{}}
 				tableB := &table{tableName: "B", deleter: &deleter{status: statusCompleted}}
 				tableA.referencedBy = []*table{tableB}
+				return tableA
+			},
+			want: true,
+		},
+		{
+			desc: "Child table has a global index",
+			tableFunc: func() *table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{}}
+				tableA.childTables = []*table{tableB}
+				tableB.hasGlobalIndex = true
+				return tableA
+			},
+			want: false,
+		},
+		{
+			desc: "Child table has a global index, but the child table was already deleted",
+			tableFunc: func() *table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{status: statusCompleted}}
+				tableA.childTables = []*table{tableB}
+				tableB.hasGlobalIndex = true
 				return tableA
 			},
 			want: true,
