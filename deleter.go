@@ -57,8 +57,11 @@ func (d *deleter) deleteRows(ctx context.Context) error {
 	return err
 }
 
+// When parent deletion started, change child status unless the child deletion has already completed.
 func (d *deleter) parentDeletionStarted() {
-	d.status = statusCascadeDeleting
+	if d.status != statusCompleted {
+		d.status = statusCascadeDeleting
+	}
 }
 
 // startRowCountUpdater starts periodical row count in another goroutine.
