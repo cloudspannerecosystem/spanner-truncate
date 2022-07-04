@@ -35,7 +35,6 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "A", parentTableName: ""},
 				{tableName: "B", parentTableName: ""},
 			},
-			indexes: nil,
 			want: []*table{
 				{tableName: "A"},
 				{tableName: "B"},
@@ -48,7 +47,6 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "B", parentTableName: ""},
 				{tableName: "C", parentTableName: "B"},
 			},
-			indexes: nil,
 			want: []*table{
 				{tableName: "A"},
 				{tableName: "B", childTables: []*table{{tableName: "C"}}},
@@ -59,7 +57,6 @@ func TestNewCoordinator(t *testing.T) {
 			schemas: []*tableSchema{
 				{tableName: "C", parentTableName: "B"},
 			},
-			indexes: nil,
 			want: []*table{
 				{tableName: "C"},
 			},
@@ -70,7 +67,6 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "C", parentTableName: "B"},
 				{tableName: "D", parentTableName: "A"},
 			},
-			indexes: nil,
 			want: []*table{
 				{tableName: "C"},
 				{tableName: "D"},
@@ -82,7 +78,6 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "C", parentTableName: "B"},
 				{tableName: "D", parentTableName: "C"},
 			},
-			indexes: nil,
 			want: []*table{
 				{tableName: "C", childTables: []*table{{tableName: "D"}}},
 			},
@@ -94,7 +89,6 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "B", parentTableName: "", referencedBy: []string{}},
 				{tableName: "C", parentTableName: "", referencedBy: []string{"B"}},
 			},
-			indexes: nil,
 			want: []*table{
 				{tableName: "A"},
 				{tableName: "B"},

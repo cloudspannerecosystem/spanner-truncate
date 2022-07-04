@@ -41,6 +41,7 @@ func (t *table) isDeletable() bool {
 		if child.parentOnDeleteAction == deleteActionNoAction && child.deleter.status != statusCompleted {
 			return false
 		}
+		// Partitioned DML may not work perfectly if a child of the target table has global indexes.
 		if child.hasGlobalIndex && child.deleter.status != statusCompleted {
 			return false
 		}
@@ -121,8 +122,7 @@ func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *span
 				tableName: schema.tableName,
 				client:    client,
 			},
-			referencedBy:   []*table{},
-			hasGlobalIndex: false,
+			referencedBy: []*table{},
 		}
 		tables = append(tables, t)
 		tableMap[schema.tableName] = t
