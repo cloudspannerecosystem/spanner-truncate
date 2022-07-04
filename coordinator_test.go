@@ -105,7 +105,7 @@ func TestNewCoordinator(t *testing.T) {
 				{indexName: "Bi", baseTableName: "B", parentTableName: "B"},
 			},
 			want: []*table{
-				{tableName: "A", childTables: []*table{{tableName: "B"}}},
+				{tableName: "A", hasGlobalIndex: false, childTables: []*table{{tableName: "B", hasGlobalIndex: false}}},
 			},
 		},
 		{
@@ -115,10 +115,10 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "B", parentTableName: "A"},
 			},
 			indexes: []*indexSchema{
-				{indexName: "Bi", baseTableName: "B", parentTableName: "B"},
+				{indexName: "Bi", baseTableName: "B", parentTableName: ""},
 			},
 			want: []*table{
-				{tableName: "A", childTables: []*table{{tableName: "B"}}},
+				{tableName: "A", hasGlobalIndex: false, childTables: []*table{{tableName: "B", hasGlobalIndex: true}}},
 			},
 		},
 	} {
@@ -437,6 +437,9 @@ func compareTables(tables1, tables2 []*table) bool {
 		t1 := tables1[i]
 		t2 := tables2[i]
 		if t1.tableName != t2.tableName {
+			return false
+		}
+		if t1.hasGlobalIndex != t2.hasGlobalIndex {
 			return false
 		}
 		if !compareTables(t1.childTables, t2.childTables) {
