@@ -144,8 +144,9 @@ func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *span
 	for _, idx := range indexes {
 		// A global index isn't interleaved in any table.
 		if idx.parentTableName == "" {
-			table := tableMap[idx.baseTableName]
-			table.hasGlobalIndex = true
+			if table, ok := tableMap[idx.baseTableName]; ok {
+				table.hasGlobalIndex = true
+			}
 		}
 	}
 
