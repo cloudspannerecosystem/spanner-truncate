@@ -31,6 +31,7 @@ type table struct {
 	parentTableName      string
 	parentOnDeleteAction deleteActionType
 	referencedBy         []*table
+	hasGlobalIndex       bool
 	deleter              *deleter
 }
 
@@ -38,6 +39,10 @@ type table struct {
 func (t *table) isDeletable() bool {
 	for _, child := range t.childTables {
 		if child.parentOnDeleteAction == deleteActionNoAction && child.deleter.status != statusCompleted {
+			return false
+		}
+		// Partitioned DML may not work perfectly if a child of the target table has global indexes.
+		if child.hasGlobalIndex && child.deleter.status != statusCompleted {
 			return false
 		}
 		if !child.isDeletable() {
@@ -105,7 +110,7 @@ type coordinator struct {
 	errChan chan error
 }
 
-func newCoordinator(schemas []*tableSchema, client *spanner.Client) *coordinator {
+func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *spanner.Client) *coordinator {
 	var tables []*table
 	tableMap := map[string]*table{}
 	for _, schema := range schemas {
@@ -132,6 +137,16 @@ func newCoordinator(schemas []*tableSchema, client *spanner.Client) *coordinator
 		table := tableMap[schema.tableName]
 		for _, referencing := range schema.referencedBy {
 			table.referencedBy = append(table.referencedBy, tableMap[referencing])
+		}
+	}
+
+	// Mark tables that has at least one global index.
+	for _, idx := range indexes {
+		// A global index isn't interleaved in any table.
+		if idx.parentTableName == "" {
+			if table, ok := tableMap[idx.baseTableName]; ok {
+				table.hasGlobalIndex = true
+			}
 		}
 	}
 

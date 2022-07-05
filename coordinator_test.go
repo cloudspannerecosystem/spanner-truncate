@@ -26,6 +26,7 @@ func TestNewCoordinator(t *testing.T) {
 	for _, test := range []struct {
 		desc    string
 		schemas []*tableSchema
+		indexes []*indexSchema
 		want    []*table
 	}{
 		{
@@ -94,9 +95,35 @@ func TestNewCoordinator(t *testing.T) {
 				{tableName: "C", referencedBy: []*table{{tableName: "B"}}},
 			},
 		},
+		{
+			desc: "Child table has an interleaved index",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: "A"},
+			},
+			indexes: []*indexSchema{
+				{indexName: "Bi", baseTableName: "B", parentTableName: "B"},
+			},
+			want: []*table{
+				{tableName: "A", hasGlobalIndex: false, childTables: []*table{{tableName: "B", hasGlobalIndex: false}}},
+			},
+		},
+		{
+			desc: "Child table has a global (non-interleaved) index",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: "A"},
+			},
+			indexes: []*indexSchema{
+				{indexName: "Bi", baseTableName: "B", parentTableName: ""},
+			},
+			want: []*table{
+				{tableName: "A", hasGlobalIndex: false, childTables: []*table{{tableName: "B", hasGlobalIndex: true}}},
+			},
+		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
-			coordinator := newCoordinator(test.schemas, nil)
+			coordinator := newCoordinator(test.schemas, test.indexes, nil)
 			got := coordinator.tables
 			if !compareTables(got, test.want) {
 				t.Errorf("invalid tables: got = %#v, want = %#v", got, test.want)
@@ -231,6 +258,56 @@ func TestFindDeletableTables(t *testing.T) {
 			},
 			want: []string{"C"},
 		},
+		{
+			desc: "Child table has a global index",
+			tablesFunc: func() []*table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{}}
+
+				tableA.childTables = []*table{tableB}
+				tableB.parentTableName = "A"
+				tableB.parentOnDeleteAction = deleteActionCascadeDelete
+
+				// Assuming that tableB has a global index
+				tableB.hasGlobalIndex = true
+
+				return []*table{tableA}
+			},
+			want: []string{"B"},
+		},
+		{
+			desc: "Child table has a global index, but already child was deleted",
+			tablesFunc: func() []*table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{status: statusCompleted}}
+
+				tableA.childTables = []*table{tableB}
+				tableB.parentTableName = "A"
+				tableB.parentOnDeleteAction = deleteActionCascadeDelete
+
+				tableB.hasGlobalIndex = true
+
+				return []*table{tableA}
+			},
+			want: []string{"A"},
+		},
+		{
+			desc: "Parent table has a global index",
+			tablesFunc: func() []*table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{}}
+
+				tableA.childTables = []*table{tableB}
+				tableB.parentTableName = "A"
+				tableB.parentOnDeleteAction = deleteActionCascadeDelete
+
+				// Assuming that tableA (parent table) has a global index.
+				tableA.hasGlobalIndex = true
+
+				return []*table{tableA}
+			},
+			want: []string{"A"}, // it shouldn't block parent deletion
+		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			got := findDeletableTables(tt.tablesFunc())
@@ -312,6 +389,28 @@ func TestTableIsDeletable(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			desc: "Child table has a global index",
+			tableFunc: func() *table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{}}
+				tableA.childTables = []*table{tableB}
+				tableB.hasGlobalIndex = true
+				return tableA
+			},
+			want: false,
+		},
+		{
+			desc: "Child table has a global index, but the child table was already deleted",
+			tableFunc: func() *table {
+				tableA := &table{tableName: "A", deleter: &deleter{}}
+				tableB := &table{tableName: "B", deleter: &deleter{status: statusCompleted}}
+				tableA.childTables = []*table{tableB}
+				tableB.hasGlobalIndex = true
+				return tableA
+			},
+			want: true,
+		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			table := tt.tableFunc()
@@ -338,6 +437,9 @@ func compareTables(tables1, tables2 []*table) bool {
 		t1 := tables1[i]
 		t2 := tables2[i]
 		if t1.tableName != t2.tableName {
+			return false
+		}
+		if t1.hasGlobalIndex != t2.hasGlobalIndex {
 			return false
 		}
 		if !compareTables(t1.childTables, t2.childTables) {

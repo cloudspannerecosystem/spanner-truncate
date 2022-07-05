@@ -104,7 +104,12 @@ func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 		fmt.Fprintf(out, "Rows in these tables will be deleted.\n")
 	}
 
-	coordinator := newCoordinator(schemas, client)
+	indexes, err := fetchIndexSchemas(ctx, client)
+	if err != nil {
+		return fmt.Errorf("failed to fetch index schema: %v", err)
+	}
+
+	coordinator := newCoordinator(schemas, indexes, client)
 	coordinator.start(ctx)
 
 	// Show progress bars.

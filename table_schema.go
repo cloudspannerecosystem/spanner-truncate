@@ -17,8 +17,9 @@
 package main
 
 import (
-	"cloud.google.com/go/spanner"
 	"context"
+
+	"cloud.google.com/go/spanner"
 )
 
 // deleteActionType is action type on parent delete.
@@ -40,6 +41,17 @@ type tableSchema struct {
 
 	// Foreign Key Reference.
 	referencedBy []string
+}
+
+// indexSchema represents secondary index metadata.
+type indexSchema struct {
+	indexName string
+
+	// Table name on which the index is defined.
+	baseTableName string
+
+	// Table name the index interleaved in. If blank, the index is a global index.
+	parentTableName string
 }
 
 func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables, excludeTables []string) ([]*tableSchema, error) {
@@ -123,4 +135,40 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 	}
 
 	return tables, nil
+}
+
+func fetchIndexSchemas(ctx context.Context, client *spanner.Client) ([]*indexSchema, error) {
+	// This query fetches defined indexes.
+	iter := client.Single().Query(ctx, spanner.NewStatement(`
+		SELECT INDEX_NAME, TABLE_NAME, PARENT_TABLE_NAME FROM INFORMATION_SCHEMA.INDEXES
+		WHERE INDEX_TYPE = 'INDEX' AND TABLE_CATALOG = '' AND TABLE_SCHEMA = '';
+	`))
+
+	var indexes []*indexSchema
+	if err := iter.Do(func(r *spanner.Row) error {
+		var (
+			indexName     string
+			baseTableName string
+			parent        spanner.NullString
+		)
+		if err := r.Columns(&indexName, &baseTableName, &parent); err != nil {
+			return err
+		}
+
+		var parentTableName string
+		if parent.Valid {
+			parentTableName = parent.StringVal
+		}
+
+		indexes = append(indexes, &indexSchema{
+			indexName:       indexName,
+			baseTableName:   baseTableName,
+			parentTableName: parentTableName,
+		})
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return indexes, nil
 }
