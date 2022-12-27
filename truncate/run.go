@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 
+// Package truncate provides the functionality to truncate all rows from a Cloud Spanner database.
 package truncate
 
 import (
@@ -28,6 +29,10 @@ import (
 	"github.com/gosuri/uiprogress"
 )
 
+// Run starts a routine to delete all rows from the specified database.
+// If targetTables is not empty, it deletes from the specified tables.
+// Otherwise, it deletes from all tables in the database.
+// If excludeTables is not empty, those tables are excluded from the deleted tables.
 func Run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer, targetTables, excludeTables []string) error {
 	database := fmt.Sprintf("projects/%s/instances/%s/databases/%s", projectID, instanceID, databaseID)
 
