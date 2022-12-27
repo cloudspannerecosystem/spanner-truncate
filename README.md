@@ -79,6 +79,4 @@ Done! All rows have been deleted successfully.
 
 ## Import as a Go package
 
-You can also make it done by calling `Run` function of `truncate` package by your own code in Go.
-
-It will help you to refer to [main.go](./main.go) in this repository.
+You can also use spanner-truncate as a Go library from your Go application. The entry point is [Run](https://pkg.go.dev/github.com/cloudspannerecosystem/spanner-truncate/truncate#Run) function in `truncate` package.
