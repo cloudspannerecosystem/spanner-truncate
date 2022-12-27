@@ -70,12 +70,12 @@ func main() {
 	defer cancel()
 	go handleInterrupt(cancel)
 
-	if err := run(ctx, opts.ProjectID, opts.InstanceID, opts.DatabaseID, opts.Quiet, os.Stdout, targetTables, excludeTables); err != nil {
+	if err := Run(ctx, opts.ProjectID, opts.InstanceID, opts.DatabaseID, opts.Quiet, os.Stdout, targetTables, excludeTables); err != nil {
 		exitf("ERROR: %s", err.Error())
 	}
 }
 
-func run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer, targetTables, excludeTables []string) error {
+func Run(ctx context.Context, projectID, instanceID, databaseID string, quiet bool, out io.Writer, targetTables, excludeTables []string) error {
 	database := fmt.Sprintf("projects/%s/instances/%s/databases/%s", projectID, instanceID, databaseID)
 
 	client, err := spanner.NewClient(ctx, database)
