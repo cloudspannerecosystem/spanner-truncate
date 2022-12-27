@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	truncate "github.com/cloudspannerecosystem/spanner-truncate/pkg/spanner-truncate"
+	"github.com/cloudspannerecosystem/spanner-truncate/truncate"
 	"github.com/jessevdk/go-flags"
 )
 
