@@ -76,3 +76,9 @@ Songs:    completed    11s [============================================>] 100% 
 
 Done! All rows have been deleted successfully.
 ```
+
+## Import as a Go package
+
+You can also make it done by calling `Run` function of `truncate` package by your own code in Go.
+
+It will help you to refer to [main.go](./main.go) in this repository.
