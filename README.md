@@ -76,3 +76,7 @@ Songs:    completed    11s [============================================>] 100% 
 
 Done! All rows have been deleted successfully.
 ```
+
+## Import as a Go package
+
+You can also use spanner-truncate as a Go library from your Go application. The entry point is [Run](https://pkg.go.dev/github.com/cloudspannerecosystem/spanner-truncate/truncate#Run) function in `truncate` package.

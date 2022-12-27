@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-package main
+package truncate
 
 import (
 	"context"
@@ -197,7 +197,7 @@ func TestIntegrationTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open /dev/null: %v", err)
 	}
-	if err := run(ctx, testProjectID, testInstanceID, testDatabaseID, true, devNull, nil, nil); err != nil {
+	if err := Run(ctx, testProjectID, testInstanceID, testDatabaseID, true, devNull, nil, nil); err != nil {
 		t.Fatalf("run spanner-truncate failed: %v", err)
 	}
 
