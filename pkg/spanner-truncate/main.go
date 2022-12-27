@@ -15,7 +15,7 @@
 //
 
 // spanner-truncate is a tool to delete all rows from the tables in a Cloud Spanner database without deleting tables themselves.
-package main
+package truncate
 
 import (
 	"bufio"
