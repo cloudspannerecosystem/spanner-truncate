@@ -1,6 +1,6 @@
 spanner-truncate
 ===
-[![CircleCI](https://circleci.com/gh/cloudspannerecosystem/spanner-truncate.svg?style=svg)](https://circleci.com/gh/cloudspannerecosystem/spanner-truncate)
+[![run-tests](https://github.com/cloudspannerecosystem/spanner-truncate/actions/workflows/run-tests.yaml/badge.svg)](https://github.com/cloudspannerecosystem/spanner-truncate/actions/workflows/run-tests.yaml)
 
 ## Overview
 
