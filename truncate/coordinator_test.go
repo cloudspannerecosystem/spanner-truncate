@@ -28,6 +28,7 @@ func TestNewCoordinator(t *testing.T) {
 		schemas []*tableSchema
 		indexes []*indexSchema
 		want    []*table
+		wantErr bool
 	}{
 		{
 			desc: "Flat",
@@ -96,6 +97,14 @@ func TestNewCoordinator(t *testing.T) {
 			},
 		},
 		{
+			desc: "Foreign Key referencing table not exist",
+			schemas: []*tableSchema{
+				{tableName: "A", parentTableName: ""},
+				{tableName: "B", parentTableName: "", referencedBy: []string{"C"}},
+			},
+			wantErr: true,
+		},
+		{
 			desc: "Child table has an interleaved index",
 			schemas: []*tableSchema{
 				{tableName: "A", parentTableName: ""},
@@ -123,7 +132,14 @@ func TestNewCoordinator(t *testing.T) {
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
-			coordinator := newCoordinator(test.schemas, test.indexes, nil)
+			coordinator, err := newCoordinator(test.schemas, test.indexes, nil)
+			if test.wantErr {
+				if err == nil {
+					t.Errorf("test wants error, but no error returned")
+				}
+				return
+			}
+
 			got := coordinator.tables
 			if !compareTables(got, test.want) {
 				t.Errorf("invalid tables: got = %#v, want = %#v", got, test.want)

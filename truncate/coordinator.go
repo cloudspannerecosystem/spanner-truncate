@@ -19,6 +19,7 @@ package truncate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"cloud.google.com/go/spanner"
@@ -110,7 +111,7 @@ type coordinator struct {
 	errChan chan error
 }
 
-func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *spanner.Client) *coordinator {
+func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *spanner.Client) (*coordinator, error) {
 	var tables []*table
 	tableMap := map[string]*table{}
 	for _, schema := range schemas {
@@ -136,6 +137,9 @@ func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *span
 
 		table := tableMap[schema.tableName]
 		for _, referencing := range schema.referencedBy {
+			if _, ok := tableMap[referencing]; !ok {
+				return nil, fmt.Errorf("%s is referenced by %s, but %s is not in the table list", schema.tableName, referencing, referencing)
+			}
 			table.referencedBy = append(table.referencedBy, tableMap[referencing])
 		}
 	}
@@ -167,7 +171,7 @@ func newCoordinator(schemas []*tableSchema, indexes []*indexSchema, client *span
 	return &coordinator{
 		tables:  topLevelTables,
 		errChan: make(chan error),
-	}
+	}, nil
 }
 
 // start starts coordination in another goroutine.
