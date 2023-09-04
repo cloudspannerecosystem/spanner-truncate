@@ -67,7 +67,10 @@ func Run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 		return fmt.Errorf("failed to fetch index schema: %v", err)
 	}
 
-	coordinator := newCoordinator(schemas, indexes, client)
+	coordinator, err := newCoordinator(schemas, indexes, client)
+	if err != nil {
+		return fmt.Errorf("failed to coordinate: %v", err)
+	}
 	coordinator.start(ctx)
 
 	// Show progress bars.
