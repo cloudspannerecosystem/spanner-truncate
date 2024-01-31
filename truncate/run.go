@@ -46,16 +46,16 @@ func Run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 		client.Close()
 	}()
 
-	return RunWithClient(ctx, client, database, quiet, out, targetTables, excludeTables)
+	return RunWithClient(ctx, client, quiet, out, targetTables, excludeTables)
 }
 
 // RunWithClient starts a routine to delete all rows using the given spanner client.
 // If targetTables is not empty, it deletes from the specified tables.
 // Otherwise, it deletes from all tables in the database.
 // If excludeTables is not empty, those tables are excluded from the deleted tables.
-// This function uses an externally passed Cloud Spanner client. A valid database name based on the form projects/PROJECT_ID/instances/INSTANCE_ID/databases/DATABASE_ID is required.
-func RunWithClient(ctx context.Context, client *spanner.Client, database string, quiet bool, out io.Writer, targetTables, excludeTables []string) error {
-	fmt.Fprintf(out, "Fetching table schema from %s\n", database)
+// This function uses an externally passed Cloud Spanner client.
+func RunWithClient(ctx context.Context, client *spanner.Client, quiet bool, out io.Writer, targetTables, excludeTables []string) error {
+	fmt.Fprintf(out, "Fetching table schema from %s\n", client.DatabaseName())
 	schemas, err := fetchTableSchemas(ctx, client, targetTables, excludeTables)
 	if err != nil {
 		return fmt.Errorf("failed to fetch table schema: %v", err)
