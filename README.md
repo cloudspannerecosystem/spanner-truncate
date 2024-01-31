@@ -79,4 +79,4 @@ Done! All rows have been deleted successfully.
 
 ## Import as a Go package
 
-You can also use spanner-truncate as a Go library from your Go application. The entry point is [Run](https://pkg.go.dev/github.com/cloudspannerecosystem/spanner-truncate/truncate#Run) function in `truncate` package.
+You can also use spanner-truncate as a Go library from your Go application. The entry point is [Run](https://pkg.go.dev/github.com/cloudspannerecosystem/spanner-truncate/truncate#Run) function in `truncate` package. If you have some subsequent processes using a client, you can use [RunWithClient](https://pkg.go.dev/github.com/cloudspannerecosystem/spanner-truncate/truncate#RunWithClient). You can pass the externally generated client to the function and avoids the use of redundant clients.
