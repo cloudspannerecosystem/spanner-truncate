@@ -17,20 +17,8 @@
 package truncate
 
 import (
-	"context"
-
 	"cloud.google.com/go/spanner"
-)
-
-// fetchMode defines the mode used to handle fetched tables.
-type fetchMode int
-
-const (
-	fetchModeAll fetchMode = iota // Fetch all tables.
-
-	// fetchModeTarget and fetchModeExclude are mutually exclusive.
-	fetchModeTarget  // Fetch tables specified by targetTables.
-	fetchModeExclude // Fetch tables except for tables specified by excludeTables.
+	"context"
 )
 
 // deleteActionType is action type on parent delete.
@@ -54,52 +42,41 @@ type tableSchema struct {
 	referencedBy []string
 }
 
-// indexSchema represents secondary index metadata.
-type indexSchema struct {
-	indexName string
-
-	// Table name on which the index is defined.
-	baseTableName string
-
-	// Table name the index interleaved in. If blank, the index is a global index.
-	parentTableName string
+func (t *tableSchema) isCascadeDeletable() bool {
+	return t.parentOnDeleteAction == deleteActionCascadeDelete
 }
 
-func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables, excludeTables []string) ([]*tableSchema, error) {
+const fetchTableSchemasQuery = `
+WITH FKReferences AS (
+	SELECT CCU.TABLE_NAME AS Referenced, ARRAY_AGG(TC.TABLE_NAME) AS Referencing
+	FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS as TC
+	INNER JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE AS CCU ON TC.CONSTRAINT_NAME = CCU.CONSTRAINT_NAME
+	WHERE TC.TABLE_CATALOG = '' AND TC.TABLE_SCHEMA = '' AND TC.CONSTRAINT_TYPE = 'FOREIGN KEY' AND CCU.TABLE_CATALOG = '' AND CCU.TABLE_SCHEMA = ''
+	GROUP BY CCU.TABLE_NAME
+)
+SELECT T.TABLE_NAME, T.PARENT_TABLE_NAME, T.ON_DELETE_ACTION, IF(F.Referencing IS NULL, ARRAY<STRING>[], F.Referencing) AS referencedBy
+FROM INFORMATION_SCHEMA.TABLES AS T
+LEFT OUTER JOIN FKReferences AS F ON T.TABLE_NAME = F.Referenced
+WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = "" AND T.TABLE_TYPE = "BASE TABLE"
+ORDER BY T.TABLE_NAME ASC
+`
+
+// fetchTableSchemas fetches schema information from spanner database.
+// If targetTables is not empty, it fetches only the specified tables.
+func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
-	iter := client.Single().Query(ctx, spanner.NewStatement(`
-		WITH FKReferences AS (
-			SELECT CCU.TABLE_NAME AS Referenced, ARRAY_AGG(TC.TABLE_NAME) AS Referencing
-			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS as TC
-			INNER JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE AS CCU ON TC.CONSTRAINT_NAME = CCU.CONSTRAINT_NAME
-			WHERE TC.TABLE_CATALOG = '' AND TC.TABLE_SCHEMA = '' AND TC.CONSTRAINT_TYPE = 'FOREIGN KEY' AND CCU.TABLE_CATALOG = '' AND CCU.TABLE_SCHEMA = ''
-			GROUP BY CCU.TABLE_NAME
-		)
-		SELECT T.TABLE_NAME, T.PARENT_TABLE_NAME, T.ON_DELETE_ACTION, IF(F.Referencing IS NULL, ARRAY<STRING>[], F.Referencing) AS referencedBy
-		FROM INFORMATION_SCHEMA.TABLES AS T
-		LEFT OUTER JOIN FKReferences AS F ON T.TABLE_NAME = F.Referenced
-		WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = "" AND T.TABLE_TYPE = "BASE TABLE"
-		ORDER BY T.TABLE_NAME ASC
-	`))
+	iter := client.Single().Query(ctx, spanner.NewStatement(fetchTableSchemasQuery))
 
-	mode := fetchModeAll
+	fetchAll := true
 	targets := make(map[string]bool, len(targetTables))
-	excludes := make(map[string]bool, len(excludeTables))
-
 	if len(targetTables) > 0 {
-		mode = fetchModeTarget
+		fetchAll = false
 		for _, t := range targetTables {
 			targets[t] = true
-		}
-	} else if len(excludeTables) > 0 {
-		mode = fetchModeExclude
-		for _, t := range excludeTables {
-			excludes[t] = true
 		}
 	}
 
 	var tables []*tableSchema
-	excludeParents := make(map[string]bool, len(excludeTables)) // Parent tables that may delete the exclude tables in cascade
 	if err := iter.Do(func(r *spanner.Row) error {
 		var (
 			tableName    string
@@ -109,6 +86,12 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		)
 		if err := r.Columns(&tableName, &parent, &deleteAction, &referencedBy); err != nil {
 			return err
+		}
+
+		if !fetchAll {
+			if _, ok := targets[tableName]; !ok {
+				return nil
+			}
 		}
 
 		var parentTableName string
@@ -126,20 +109,6 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 			}
 		}
 
-		switch mode {
-		case fetchModeTarget:
-			if _, ok := targets[tableName]; !ok {
-				return nil
-			}
-		case fetchModeExclude:
-			if _, ok := excludes[tableName]; ok {
-				if typ == deleteActionCascadeDelete {
-					excludeParents[parentTableName] = true
-				}
-				return nil
-			}
-		}
-
 		tables = append(tables, &tableSchema{
 			tableName:            tableName,
 			parentTableName:      parentTableName,
@@ -151,52 +120,49 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		return nil, err
 	}
 
-	// Remove tables that may delete the exclude tables in cascade
-	if mode == fetchModeExclude && len(excludeParents) > 0 {
-		filtered := make([]*tableSchema, 0, len(tables))
-		for _, t := range tables {
-			if _, ok := excludeParents[t.tableName]; !ok {
-				filtered = append(filtered, t)
-			}
-		}
-		tables = filtered
-	}
-
 	return tables, nil
 }
 
-func fetchIndexSchemas(ctx context.Context, client *spanner.Client) ([]*indexSchema, error) {
-	// This query fetches defined indexes.
-	iter := client.Single().Query(ctx, spanner.NewStatement(`
-		SELECT INDEX_NAME, TABLE_NAME, PARENT_TABLE_NAME FROM INFORMATION_SCHEMA.INDEXES
-		WHERE INDEX_TYPE = 'INDEX' AND TABLE_CATALOG = '' AND TABLE_SCHEMA = '';
-	`))
-
-	var indexes []*indexSchema
-	if err := iter.Do(func(r *spanner.Row) error {
-		var (
-			indexName     string
-			baseTableName string
-			parent        spanner.NullString
-		)
-		if err := r.Columns(&indexName, &baseTableName, &parent); err != nil {
-			return err
-		}
-
-		var parentTableName string
-		if parent.Valid {
-			parentTableName = parent.StringVal
-		}
-
-		indexes = append(indexes, &indexSchema{
-			indexName:       indexName,
-			baseTableName:   baseTableName,
-			parentTableName: parentTableName,
-		})
-		return nil
-	}); err != nil {
-		return nil, err
+// filterTableSchemas filters tables by excludeTables.
+// If an exclude table is cascade deletable, its parent table is also excluded.
+func filterTableSchemas(tables []*tableSchema, excludeTables []string) []*tableSchema {
+	if len(excludeTables) == 0 {
+		return tables
 	}
 
-	return indexes, nil
+	excludes := make(map[string]struct{}, len(tables))
+	for _, t := range excludeTables {
+		excludes[t] = struct{}{}
+	}
+
+	// Add parent tables that may delete the exclude tables in cascade
+	// Since interleave tables can be hierarchical, tracing up to the top level is needed.
+	for {
+		excludeParents := make(map[string]struct{}, len(excludes))
+		for _, t := range tables {
+			if _, ok := excludes[t.tableName]; ok && t.isCascadeDeletable() {
+				if _, alreadyExcluded := excludes[t.parentTableName]; !alreadyExcluded {
+					excludeParents[t.parentTableName] = struct{}{}
+				}
+			}
+		}
+
+		// loop until no more parent tables to exclude
+		if len(excludeParents) == 0 {
+			break
+		}
+
+		for p := range excludeParents {
+			excludes[p] = struct{}{}
+		}
+	}
+
+	filtered := make([]*tableSchema, 0, len(tables))
+	for _, t := range tables {
+		if _, ok := excludes[t.tableName]; !ok {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return filtered
 }
