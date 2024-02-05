@@ -77,7 +77,6 @@ func TestFilterTableSchemas(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 // The table schemas are well known in Cloud Spanner document about 'schema and data model'.

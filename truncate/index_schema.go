@@ -17,8 +17,9 @@
 package truncate
 
 import (
-	"cloud.google.com/go/spanner"
 	"context"
+
+	"cloud.google.com/go/spanner"
 )
 
 // indexSchema represents secondary index metadata.

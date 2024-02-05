@@ -17,8 +17,9 @@
 package truncate
 
 import (
-	"cloud.google.com/go/spanner"
 	"context"
+
+	"cloud.google.com/go/spanner"
 )
 
 // deleteActionType is action type on parent delete.
