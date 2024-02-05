@@ -22,6 +22,17 @@ import (
 	"cloud.google.com/go/spanner"
 )
 
+// fetchMode defines the mode used to handle fetched tables.
+type fetchMode int
+
+const (
+	fetchModeAll fetchMode = iota // Fetch all tables.
+
+	// fetchModeTarget and fetchModeExclude are mutually exclusive.
+	fetchModeTarget  // Fetch tables specified by targetTables.
+	fetchModeExclude // Fetch tables except for tables specified by excludeTables.
+)
+
 // deleteActionType is action type on parent delete.
 type deleteActionType int
 
@@ -71,20 +82,24 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		ORDER BY T.TABLE_NAME ASC
 	`))
 
-	truncateAll := true
+	mode := fetchModeAll
 	targets := make(map[string]bool, len(targetTables))
 	excludes := make(map[string]bool, len(excludeTables))
-	if len(targetTables) > 0 || len(excludeTables) > 0 {
-		truncateAll = false
+
+	if len(targetTables) > 0 {
+		mode = fetchModeTarget
 		for _, t := range targetTables {
 			targets[t] = true
 		}
+	} else if len(excludeTables) > 0 {
+		mode = fetchModeExclude
 		for _, t := range excludeTables {
 			excludes[t] = true
 		}
 	}
 
 	var tables []*tableSchema
+	excludeParents := make(map[string]bool, len(excludeTables)) // Parent tables that may delete the exclude tables in cascade
 	if err := iter.Do(func(r *spanner.Row) error {
 		var (
 			tableName    string
@@ -94,18 +109,6 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		)
 		if err := r.Columns(&tableName, &parent, &deleteAction, &referencedBy); err != nil {
 			return err
-		}
-
-		if !truncateAll {
-			if len(excludes) != 0 {
-				if _, ok := excludes[tableName]; ok {
-					return nil
-				}
-			} else {
-				if _, ok := targets[tableName]; !ok {
-					return nil
-				}
-			}
 		}
 
 		var parentTableName string
@@ -123,6 +126,20 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 			}
 		}
 
+		switch mode {
+		case fetchModeTarget:
+			if _, ok := targets[tableName]; !ok {
+				return nil
+			}
+		case fetchModeExclude:
+			if _, ok := excludes[tableName]; ok {
+				if typ == deleteActionCascadeDelete {
+					excludeParents[parentTableName] = true
+				}
+				return nil
+			}
+		}
+
 		tables = append(tables, &tableSchema{
 			tableName:            tableName,
 			parentTableName:      parentTableName,
@@ -132,6 +149,17 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+
+	// Remove tables that may delete the exclude tables in cascade
+	if mode == fetchModeExclude && len(excludeParents) > 0 {
+		filtered := make([]*tableSchema, 0, len(tables))
+		for _, t := range tables {
+			if _, ok := excludeParents[t.tableName]; !ok {
+				filtered = append(filtered, t)
+			}
+		}
+		tables = filtered
 	}
 
 	return tables, nil
