@@ -18,6 +18,7 @@ package truncate
 
 import (
 	"context"
+	"errors"
 
 	"cloud.google.com/go/spanner"
 )
@@ -59,8 +60,7 @@ type indexSchema struct {
 }
 
 // fetchTableSchemas fetches schema information from spanner database.
-// If targetTables is not empty, it fetches only the specified tables.
-func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
+func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
 	iter := client.Single().Query(ctx, spanner.NewStatement(`
 WITH FKReferences AS (
@@ -77,15 +77,6 @@ WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = "" AND T.TABLE_TYPE = "BASE TABL
 ORDER BY T.TABLE_NAME ASC
 `))
 
-	fetchAll := true
-	targets := make(map[string]bool, len(targetTables))
-	if len(targetTables) > 0 {
-		fetchAll = false
-		for _, t := range targetTables {
-			targets[t] = true
-		}
-	}
-
 	var tables []*tableSchema
 	if err := iter.Do(func(r *spanner.Row) error {
 		var (
@@ -96,12 +87,6 @@ ORDER BY T.TABLE_NAME ASC
 		)
 		if err := r.Columns(&tableName, &parent, &deleteAction, &referencedBy); err != nil {
 			return err
-		}
-
-		if !fetchAll {
-			if _, ok := targets[tableName]; !ok {
-				return nil
-			}
 		}
 
 		var parentTableName string
@@ -133,9 +118,52 @@ ORDER BY T.TABLE_NAME ASC
 	return tables, nil
 }
 
-// filterTableSchemas filters tables by excludeTables.
-// If an exclude table is cascade deletable, its parent table is also excluded.
-func filterTableSchemas(tables []*tableSchema, excludeTables []string) []*tableSchema {
+// filterTableSchemas filters tables with given targetTables and excludeTables.
+// If targetTables is not empty, it fetches only the specified tables.
+// If excludeTables is not empty, it excludes the specified tables.
+// TargetTables and excludeTables cannot be specified at the same time.
+func filterTableSchemas(tables []*tableSchema, targetTables, excludeTables []string) ([]*tableSchema, error) {
+	isExclude := len(excludeTables) > 0
+	isTarget := len(targetTables) > 0
+
+	switch {
+	case isTarget && isExclude:
+		return nil, errors.New("both targetTables and excludeTables cannot be specified at the same time")
+	case isTarget:
+		return targetFilterTableSchemas(tables, targetTables), nil
+	case isExclude:
+		return excludeFilterTableSchemas(tables, excludeTables), nil
+	default:
+		return tables, nil
+	}
+}
+
+// targetFilterTableSchemas filters tables with given targetTables.
+// If targetTables is empty, it returns all tables.
+func targetFilterTableSchemas(tables []*tableSchema, targetTables []string) []*tableSchema {
+	if len(targetTables) == 0 {
+		return tables
+	}
+
+	targets := make(map[string]struct{}, len(targetTables))
+	for _, t := range targetTables {
+		targets[t] = struct{}{}
+	}
+
+	filtered := make([]*tableSchema, 0, len(tables))
+	for _, t := range tables {
+		if _, ok := targets[t.tableName]; ok {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return filtered
+}
+
+// excludeFilterTableSchemas filters tables with given excludeTables.
+// If excludeTables is empty, it returns all tables.
+// When an exclude table is cascade deletable, its parent table is also excluded.
+func excludeFilterTableSchemas(tables []*tableSchema, excludeTables []string) []*tableSchema {
 	if len(excludeTables) == 0 {
 		return tables
 	}
