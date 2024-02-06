@@ -58,7 +58,11 @@ type indexSchema struct {
 	parentTableName string
 }
 
-const fetchTableSchemasQuery = `
+// fetchTableSchemas fetches schema information from spanner database.
+// If targetTables is not empty, it fetches only the specified tables.
+func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
+	// This query fetches the table metadata and relationships.
+	iter := client.Single().Query(ctx, spanner.NewStatement(`
 WITH FKReferences AS (
 	SELECT CCU.TABLE_NAME AS Referenced, ARRAY_AGG(TC.TABLE_NAME) AS Referencing
 	FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS as TC
@@ -71,13 +75,7 @@ FROM INFORMATION_SCHEMA.TABLES AS T
 LEFT OUTER JOIN FKReferences AS F ON T.TABLE_NAME = F.Referenced
 WHERE T.TABLE_CATALOG = "" AND T.TABLE_SCHEMA = "" AND T.TABLE_TYPE = "BASE TABLE"
 ORDER BY T.TABLE_NAME ASC
-`
-
-// fetchTableSchemas fetches schema information from spanner database.
-// If targetTables is not empty, it fetches only the specified tables.
-func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables []string) ([]*tableSchema, error) {
-	// This query fetches the table metadata and relationships.
-	iter := client.Single().Query(ctx, spanner.NewStatement(fetchTableSchemasQuery))
+`))
 
 	fetchAll := true
 	targets := make(map[string]bool, len(targetTables))
