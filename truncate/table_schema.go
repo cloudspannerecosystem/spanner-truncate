@@ -129,9 +129,9 @@ func filterTableSchemas(tables []*tableSchema, targetTables, excludeTables []str
 	switch {
 	case isTarget && isExclude:
 		return nil, errors.New("both targetTables and excludeTables cannot be specified at the same time")
-	case isTarget && !isExclude:
+	case isTarget:
 		return targetFilterTableSchemas(tables, targetTables), nil
-	case !isTarget && isExclude:
+	case isExclude:
 		return excludeFilterTableSchemas(tables, excludeTables), nil
 	default: // No target and exclude tables are specified.
 		return tables, nil
