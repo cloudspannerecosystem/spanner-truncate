@@ -218,14 +218,14 @@ func constructTableLineages(tables []*tableSchema) []*tableLineage {
 
 	parentRelation := make(map[string]*tableSchema, len(tables))
 	for _, t := range tables {
-		if !t.isRoot() {
+		if !t.isRoot() && t.isCascadeDeletable() {
 			parentRelation[t.tableName] = tableMap[t.parentTableName]
 		}
 	}
 
 	childRelation := make(map[string][]*tableSchema, len(tables))
 	for _, t := range tables {
-		if !t.isRoot() {
+		if !t.isRoot() && t.isCascadeDeletable() {
 			childRelation[t.parentTableName] = append(childRelation[t.parentTableName], t)
 		}
 	}
@@ -244,8 +244,7 @@ func constructTableLineages(tables []*tableSchema) []*tableLineage {
 
 // findAncestors recursively finds all ancestors of the given table .
 func findAncestors(table *tableSchema, parentRelation map[string]*tableSchema, ancestors []*tableSchema) []*tableSchema {
-	if !table.isRoot() {
-		parent := parentRelation[table.tableName]
+	if parent, ok := parentRelation[table.tableName]; ok {
 		ancestors = append(ancestors, parent)
 		return findAncestors(parent, parentRelation, ancestors)
 	}
