@@ -206,7 +206,6 @@ func excludeFilterTableSchemas(tables []*tableSchema, excludeTableSchemas []stri
 	}
 
 	return filtered
-
 }
 
 // constructTableLineages returns a list of interleave Lineages.
