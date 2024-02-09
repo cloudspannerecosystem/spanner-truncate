@@ -145,14 +145,14 @@ func targetFilterTableSchemas(tables []*tableSchema, targetTables []string) []*t
 		return tables
 	}
 
-	targets := make(map[string]struct{}, len(targetTables))
+	isTarget := make(map[string]bool, len(tables))
 	for _, t := range targetTables {
-		targets[t] = struct{}{}
+		isTarget[t] = true
 	}
 
 	filtered := make([]*tableSchema, 0, len(tables))
 	for _, t := range tables {
-		if _, ok := targets[t.tableName]; ok {
+		if isTarget[t.tableName] {
 			filtered = append(filtered, t)
 		}
 	}
@@ -168,20 +168,18 @@ func excludeFilterTableSchemas(tables []*tableSchema, excludeTables []string) []
 		return tables
 	}
 
-	excludes := make(map[string]struct{}, len(tables))
+	isExclude := make(map[string]bool, len(tables))
 	for _, t := range excludeTables {
-		excludes[t] = struct{}{}
+		isExclude[t] = true
 	}
 
 	// Add parent tables that may delete the exclude tables in cascade
 	// Since interleave tables can be hierarchical, tracing up to the top level is needed.
 	for {
-		excludeParents := make(map[string]struct{}, len(excludes))
+		excludeParents := make(map[string]struct{}, len(isExclude))
 		for _, t := range tables {
-			if _, ok := excludes[t.tableName]; ok && t.isCascadeDeletable() {
-				if _, alreadyExcluded := excludes[t.parentTableName]; !alreadyExcluded {
-					excludeParents[t.parentTableName] = struct{}{}
-				}
+			if isExclude[t.tableName] && !isExclude[t.parentTableName] && t.isCascadeDeletable() {
+				excludeParents[t.parentTableName] = struct{}{}
 			}
 		}
 
@@ -191,13 +189,13 @@ func excludeFilterTableSchemas(tables []*tableSchema, excludeTables []string) []
 		}
 
 		for p := range excludeParents {
-			excludes[p] = struct{}{}
+			isExclude[p] = true
 		}
 	}
 
 	filtered := make([]*tableSchema, 0, len(tables))
 	for _, t := range tables {
-		if _, ok := excludes[t.tableName]; !ok {
+		if !isExclude[t.tableName] {
 			filtered = append(filtered, t)
 		}
 	}
