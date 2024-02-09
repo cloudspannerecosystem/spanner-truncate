@@ -53,42 +53,39 @@ func TestTargetFilterTableSchemas(t *testing.T) {
 		cmp.AllowUnexported(tableSchema{}),
 	}
 
-	// Detailed tests for targetFilterTableSchemas
-	t.Run("targetFilterTableSchemas", func(t *testing.T) {
-		for _, test := range []struct {
-			desc         string
-			schemas      []*tableSchema
-			targetTables []string
-			want         []*tableSchema
-		}{
-			{
-				desc:         "Include multiple tables",
-				schemas:      []*tableSchema{t1, t2, t3},
-				targetTables: []string{t1.tableName, t2.tableName},
-				want:         []*tableSchema{t1, t2},
-			},
-			{
-				desc:         "Do nothing when no target tables are passed.",
-				schemas:      []*tableSchema{t1, t2, t3},
-				targetTables: nil,
-				want:         []*tableSchema{t1, t2, t3},
-			},
-			// TODO: Determine the specifications for parent-child relationships in hierarchical interleaved tables, and add corresponding tests and implementation.
-			// This includes defining the behavior of targetFilterTableSchemas for cases where tables not included in the target list are subject to cascade deletion.
-		} {
-			t.Run(test.desc, func(t *testing.T) {
-				got := targetFilterTableSchemas(test.schemas, test.targetTables)
+	for _, test := range []struct {
+		desc         string
+		schemas      []*tableSchema
+		targetTables []string
+		want         []*tableSchema
+	}{
+		{
+			desc:         "Include multiple tables",
+			schemas:      []*tableSchema{t1, t2, t3},
+			targetTables: []string{t1.tableName, t2.tableName},
+			want:         []*tableSchema{t1, t2},
+		},
+		{
+			desc:         "Do nothing when no target tables are passed.",
+			schemas:      []*tableSchema{t1, t2, t3},
+			targetTables: nil,
+			want:         []*tableSchema{t1, t2, t3},
+		},
+		// TODO: Determine the specifications for parent-child relationships in hierarchical interleaved tables, and add corresponding tests and implementation.
+		// This includes defining the behavior of targetFilterTableSchemas for cases where tables not included in the target list are subject to cascade deletion.
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			got := targetFilterTableSchemas(test.schemas, test.targetTables)
 
-				if len(got) != len(test.want) {
-					t.Errorf("len(got) %d, len(want) %d", len(got), len(test.want))
-				}
+			if len(got) != len(test.want) {
+				t.Errorf("len(got) %d, len(want) %d", len(got), len(test.want))
+			}
 
-				if diff := cmp.Diff(got, test.want, opts...); diff != "" {
-					t.Errorf("mismatch (-got +want):\n%s", diff)
-				}
-			})
-		}
-	})
+			if diff := cmp.Diff(got, test.want, opts...); diff != "" {
+				t.Errorf("mismatch (-got +want):\n%s", diff)
+			}
+		})
+	}
 }
 
 func TestExcludeFilterTableSchemas(t *testing.T) {
@@ -142,50 +139,47 @@ func TestExcludeFilterTableSchemas(t *testing.T) {
 		cmp.AllowUnexported(tableSchema{}),
 	}
 
-	// Detailed tests for excludeFilterTableSchemas
-	t.Run("excludeFilterTableSchemas", func(t *testing.T) {
-		for _, test := range []struct {
-			desc          string
-			schemas       []*tableSchema
-			excludeTables []string
-			want          []*tableSchema
-		}{
-			{
-				desc:          "Exclude the parent tables by tracing up to the topmost level.",
-				schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
-				excludeTables: []string{songs.tableName},
-				want:          []*tableSchema{t1, t2, t3},
-			},
-			{
-				desc:          "Exclude only the higher levels without the lower levels.",
-				schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
-				excludeTables: []string{albums.tableName},
-				want:          []*tableSchema{songs, t1, t2, t3},
-			},
-			{
-				desc:          "Exclude multiple tables.",
-				schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
-				excludeTables: []string{songs.tableName, t1.tableName, t2.tableName},
-				want:          []*tableSchema{t3},
-			},
-			{
-				desc:          "Do nothing when no exclude tables are passed.",
-				schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
-				excludeTables: nil,
-				want:          []*tableSchema{singers, albums, songs, t1, t2, t3},
-			},
-		} {
-			t.Run(test.desc, func(t *testing.T) {
-				got := excludeFilterTableSchemas(test.schemas, test.excludeTables)
+	for _, test := range []struct {
+		desc          string
+		schemas       []*tableSchema
+		excludeTables []string
+		want          []*tableSchema
+	}{
+		{
+			desc:          "Exclude the parent tables by tracing up to the topmost level.",
+			schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
+			excludeTables: []string{songs.tableName},
+			want:          []*tableSchema{t1, t2, t3},
+		},
+		{
+			desc:          "Exclude only the higher levels without the lower levels.",
+			schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
+			excludeTables: []string{albums.tableName},
+			want:          []*tableSchema{songs, t1, t2, t3},
+		},
+		{
+			desc:          "Exclude multiple tables.",
+			schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
+			excludeTables: []string{songs.tableName, t1.tableName, t2.tableName},
+			want:          []*tableSchema{t3},
+		},
+		{
+			desc:          "Do nothing when no exclude tables are passed.",
+			schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
+			excludeTables: nil,
+			want:          []*tableSchema{singers, albums, songs, t1, t2, t3},
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			got := excludeFilterTableSchemas(test.schemas, test.excludeTables)
 
-				if len(got) != len(test.want) {
-					t.Errorf("len(got) %d, len(want) %d", len(got), len(test.want))
-				}
+			if len(got) != len(test.want) {
+				t.Errorf("len(got) %d, len(want) %d", len(got), len(test.want))
+			}
 
-				if diff := cmp.Diff(got, test.want, opts...); diff != "" {
-					t.Errorf("mismatch (-got +want):\n%s", diff)
-				}
-			})
-		}
-	})
+			if diff := cmp.Diff(got, test.want, opts...); diff != "" {
+				t.Errorf("mismatch (-got +want):\n%s", diff)
+			}
+		})
+	}
 }
