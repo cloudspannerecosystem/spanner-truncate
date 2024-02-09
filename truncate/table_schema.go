@@ -217,15 +217,10 @@ func constructTableLineages(tables []*tableSchema) []*tableLineage {
 	}
 
 	parentRelation := make(map[string]*tableSchema, len(tables))
-	for _, t := range tables {
-		if !t.isRoot() && t.isCascadeDeletable() {
-			parentRelation[t.tableName] = tableMap[t.parentTableName]
-		}
-	}
-
 	childRelation := make(map[string][]*tableSchema, len(tables))
 	for _, t := range tables {
 		if !t.isRoot() && t.isCascadeDeletable() {
+			parentRelation[t.tableName] = tableMap[t.parentTableName]
 			childRelation[t.parentTableName] = append(childRelation[t.parentTableName], t)
 		}
 	}
