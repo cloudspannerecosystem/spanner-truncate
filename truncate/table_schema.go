@@ -191,7 +191,7 @@ func excludeFilterTableSchemas(tables []*tableSchema, excludeTableSchemas []stri
 	// Additionally exclude parent tables that may delete the exclude tables in cascade
 	lineages := constructTableLineages(tables)
 	for _, l := range lineages {
-		if isExclude[l.tableSchema.tableName] {
+		if isExclude[l.tableSchema.tableName] && l.tableSchema.isCascadeDeletable() {
 			for _, a := range l.ancestors {
 				isExclude[a.tableName] = true
 			}
@@ -219,7 +219,7 @@ func constructTableLineages(tables []*tableSchema) []*tableLineage {
 	parentRelation := make(map[string]*tableSchema, len(tables))
 	childRelation := make(map[string][]*tableSchema, len(tables))
 	for _, t := range tables {
-		if !t.isRoot() && t.isCascadeDeletable() {
+		if !t.isRoot() {
 			parentRelation[t.tableName] = tableMap[t.parentTableName]
 			childRelation[t.parentTableName] = append(childRelation[t.parentTableName], t)
 		}
