@@ -90,7 +90,7 @@ func TestTargetFilterTableSchemas(t *testing.T) {
 
 func TestExcludeFilterTableSchemas(t *testing.T) {
 	var (
-		// The following tables are hierarchical schemas.
+		// The following tables are hierarchical schemas and deleted in cascade.
 		// The table schemas are well known in Cloud Spanner document about 'schema and data model'.
 		singers = &tableSchema{
 			tableName:            "Singers",
@@ -128,6 +128,26 @@ func TestExcludeFilterTableSchemas(t *testing.T) {
 			tableName:            "t3",
 			parentTableName:      "",
 			parentOnDeleteAction: deleteActionUndefined,
+			referencedBy:         nil,
+		}
+
+		// // The following tables are hierarchical schemas and not deleted in cascade.
+		t4 = &tableSchema{
+			tableName:            "t4",
+			parentTableName:      "",
+			parentOnDeleteAction: deleteActionUndefined,
+			referencedBy:         nil,
+		}
+		t5 = &tableSchema{
+			tableName:            "t5",
+			parentTableName:      "t4",
+			parentOnDeleteAction: deleteActionNoAction,
+			referencedBy:         nil,
+		}
+		t6 = &tableSchema{
+			tableName:            "t6",
+			parentTableName:      "t5",
+			parentOnDeleteAction: deleteActionNoAction,
 			referencedBy:         nil,
 		}
 	)
@@ -168,6 +188,12 @@ func TestExcludeFilterTableSchemas(t *testing.T) {
 			schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
 			excludeTables: nil,
 			want:          []*tableSchema{singers, albums, songs, t1, t2, t3},
+		},
+		{
+			desc:          "Do not exclude the parent tables that are not deleted in cascade.",
+			schemas:       []*tableSchema{singers, albums, songs, t4, t5, t6},
+			excludeTables: []string{songs.tableName, t6.tableName},
+			want:          []*tableSchema{t4, t5},
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
