@@ -53,7 +53,7 @@ Application Options:
   -d, --database= (required) Cloud Spanner Database ID. [$SPANNER_DATABASE_ID]
   -q, --quiet     Disable all interactive prompts.
   -t, --tables=   Comma separated table names to be truncated. Default to truncate all tables if not specified.
-  -e, --exclude-tables Comma separated table names to be exempted from truncating. 'tables' and 'exclude-tables' cannot co-exist.
+  -e, --exclude-tables Comma separated table names to be exempted from truncating. 'tables' and 'exclude-tables' cannot co-exist. If interleaved tables are specified, the parent table is also excluded.
 Help Options:
   -h, --help      Show this help message
 ```

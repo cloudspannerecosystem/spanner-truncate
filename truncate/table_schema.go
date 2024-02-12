@@ -18,6 +18,7 @@ package truncate
 
 import (
 	"context"
+	"errors"
 
 	"cloud.google.com/go/spanner"
 )
@@ -43,6 +44,14 @@ type tableSchema struct {
 	referencedBy []string
 }
 
+func (t *tableSchema) isCascadeDeletable() bool {
+	return t.parentOnDeleteAction == deleteActionCascadeDelete
+}
+
+func (t *tableSchema) isRoot() bool {
+	return t.parentTableName == ""
+}
+
 // indexSchema represents secondary index metadata.
 type indexSchema struct {
 	indexName string
@@ -54,7 +63,17 @@ type indexSchema struct {
 	parentTableName string
 }
 
-func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables, excludeTables []string) ([]*tableSchema, error) {
+// tableLineage represents a table schema and its ancestors and descendants.
+// This is used to represent inter-table relationships.
+// The order of ancestors and descendants are not guaranteed.
+type tableLineage struct {
+	tableSchema *tableSchema
+	ancestors   []*tableSchema
+	descendants []*tableSchema
+}
+
+// fetchTableSchemas fetches schema information from spanner database.
+func fetchTableSchemas(ctx context.Context, client *spanner.Client) ([]*tableSchema, error) {
 	// This query fetches the table metadata and relationships.
 	iter := client.Single().Query(ctx, spanner.NewStatement(`
 		WITH FKReferences AS (
@@ -71,19 +90,6 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		ORDER BY T.TABLE_NAME ASC
 	`))
 
-	truncateAll := true
-	targets := make(map[string]bool, len(targetTables))
-	excludes := make(map[string]bool, len(excludeTables))
-	if len(targetTables) > 0 || len(excludeTables) > 0 {
-		truncateAll = false
-		for _, t := range targetTables {
-			targets[t] = true
-		}
-		for _, t := range excludeTables {
-			excludes[t] = true
-		}
-	}
-
 	var tables []*tableSchema
 	if err := iter.Do(func(r *spanner.Row) error {
 		var (
@@ -94,18 +100,6 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 		)
 		if err := r.Columns(&tableName, &parent, &deleteAction, &referencedBy); err != nil {
 			return err
-		}
-
-		if !truncateAll {
-			if len(excludes) != 0 {
-				if _, ok := excludes[tableName]; ok {
-					return nil
-				}
-			} else {
-				if _, ok := targets[tableName]; !ok {
-					return nil
-				}
-			}
 		}
 
 		var parentTableName string
@@ -135,6 +129,130 @@ func fetchTableSchemas(ctx context.Context, client *spanner.Client, targetTables
 	}
 
 	return tables, nil
+}
+
+// filterTableSchemas filters tables with given targetTables and excludeTables.
+// If targetTables is not empty, it fetches only the specified tables.
+// If excludeTables is not empty, it excludes the specified tables.
+// TargetTables and excludeTables cannot be specified at the same time.
+func filterTableSchemas(tables []*tableSchema, targetTables, excludeTables []string) ([]*tableSchema, error) {
+	isExclude := len(excludeTables) > 0
+	isTarget := len(targetTables) > 0
+
+	switch {
+	case isTarget && isExclude:
+		return nil, errors.New("both targetTables and excludeTables cannot be specified at the same time")
+	case isTarget:
+		return targetFilterTableSchemas(tables, targetTables), nil
+	case isExclude:
+		return excludeFilterTableSchemas(tables, excludeTables), nil
+	default: // No target and exclude tables are specified.
+		return tables, nil
+	}
+}
+
+// targetFilterTableSchemas filters tables with given targetTables.
+// If targetTables is empty, it returns all tables.
+func targetFilterTableSchemas(tables []*tableSchema, targetTables []string) []*tableSchema {
+	if len(targetTables) == 0 {
+		return tables
+	}
+
+	isTarget := make(map[string]bool, len(tables))
+	for _, t := range targetTables {
+		isTarget[t] = true
+	}
+
+	// TODO: Add child tables that may be deleted in cascade (#18)
+
+	filtered := make([]*tableSchema, 0, len(tables))
+	for _, t := range tables {
+		if isTarget[t.tableName] {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return filtered
+}
+
+// excludeFilterTableSchemas filters tables with given excludeTables.
+// If excludeTables is empty, it returns all tables.
+// When an exclude table is cascade deletable, its parent table is also excluded.
+func excludeFilterTableSchemas(tables []*tableSchema, excludeTableSchemas []string) []*tableSchema {
+	if len(excludeTableSchemas) == 0 {
+		return tables
+	}
+
+	isExclude := make(map[string]bool, len(tables))
+	for _, t := range excludeTableSchemas {
+		isExclude[t] = true
+	}
+
+	// Additionally exclude parent tables that may delete the exclude tables in cascade
+	lineages := constructTableLineages(tables)
+	for _, l := range lineages {
+		if isExclude[l.tableSchema.tableName] && l.tableSchema.isCascadeDeletable() {
+			for _, a := range l.ancestors {
+				isExclude[a.tableName] = true
+			}
+		}
+	}
+
+	filtered := make([]*tableSchema, 0, len(tables))
+	for _, t := range tables {
+		if !isExclude[t.tableName] {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return filtered
+}
+
+// constructTableLineages returns a list of interleave Lineages.
+// This function creates tableLineage for each of all given tableSchemas.
+func constructTableLineages(tables []*tableSchema) []*tableLineage {
+	tableMap := make(map[string]*tableSchema, len(tables))
+	for _, t := range tables {
+		tableMap[t.tableName] = t
+	}
+
+	parentRelation := make(map[string]*tableSchema, len(tables))
+	childRelation := make(map[string][]*tableSchema, len(tables))
+	for _, t := range tables {
+		if !t.isRoot() {
+			parentRelation[t.tableName] = tableMap[t.parentTableName]
+			childRelation[t.parentTableName] = append(childRelation[t.parentTableName], t)
+		}
+	}
+
+	lineages := make([]*tableLineage, 0, len(tables))
+	for _, t := range tables {
+		lineages = append(lineages, &tableLineage{
+			tableSchema: t,
+			ancestors:   findAncestors(t, parentRelation, nil),
+			descendants: findDescendants(t, childRelation, nil),
+		})
+	}
+
+	return lineages
+}
+
+// findAncestors recursively finds all ancestors of the given table .
+func findAncestors(table *tableSchema, parentRelation map[string]*tableSchema, ancestors []*tableSchema) []*tableSchema {
+	if parent, ok := parentRelation[table.tableName]; ok {
+		ancestors = append(ancestors, parent)
+		return findAncestors(parent, parentRelation, ancestors)
+	}
+	return ancestors
+}
+
+// findDescendants recursively finds all descendants of the given table.
+func findDescendants(table *tableSchema, childRelation map[string][]*tableSchema, descendants []*tableSchema) []*tableSchema {
+	for _, child := range childRelation[table.tableName] {
+		descendants = append(descendants, child)
+		descendants = findDescendants(child, childRelation, descendants)
+	}
+	return descendants
 }
 
 func fetchIndexSchemas(ctx context.Context, client *spanner.Client) ([]*indexSchema, error) {

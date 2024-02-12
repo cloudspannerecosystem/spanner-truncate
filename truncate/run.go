@@ -56,14 +56,21 @@ func Run(ctx context.Context, projectID, instanceID, databaseID string, quiet bo
 // This function uses an externally passed Cloud Spanner client.
 func RunWithClient(ctx context.Context, client *spanner.Client, quiet bool, out io.Writer, targetTables, excludeTables []string) error {
 	fmt.Fprintf(out, "Fetching table schema from %s\n", client.DatabaseName())
-	schemas, err := fetchTableSchemas(ctx, client, targetTables, excludeTables)
+	schemas, err := fetchTableSchemas(ctx, client)
 	if err != nil {
 		return fmt.Errorf("failed to fetch table schema: %v", err)
 	}
+
+	schemas, err = filterTableSchemas(schemas, targetTables, excludeTables)
+	if err != nil {
+		return fmt.Errorf("failed to filter table schema: %v", err)
+	}
+
 	for _, schema := range schemas {
 		fmt.Fprintf(out, "%s\n", schema.tableName)
 	}
 	fmt.Fprintf(out, "\n")
+
 	if !quiet {
 		if !confirm(out, "Rows in these tables will be deleted. Do you want to continue?") {
 			return nil
