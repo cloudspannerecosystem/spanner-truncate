@@ -25,6 +25,27 @@ import (
 
 func TestTargetFilterTableSchemas(t *testing.T) {
 	var (
+		// The following tables are hierarchical schemas and deleted in cascade.
+		// The table schemas are well known in Cloud Spanner document about 'schema and data model'.
+		singers = &tableSchema{
+			tableName:            "Singers",
+			parentTableName:      "",
+			parentOnDeleteAction: deleteActionUndefined,
+			referencedBy:         nil,
+		}
+		albums = &tableSchema{
+			tableName:            "Albums",
+			parentTableName:      "Singers",
+			parentOnDeleteAction: deleteActionCascadeDelete,
+			referencedBy:         nil,
+		}
+		songs = &tableSchema{
+			tableName:            "Songs",
+			parentTableName:      "Albums",
+			parentOnDeleteAction: deleteActionCascadeDelete,
+			referencedBy:         nil,
+		}
+
 		// The following tables are flat schemas and not related to each other.
 		t1 = &tableSchema{
 			tableName:            "t1",
@@ -44,6 +65,26 @@ func TestTargetFilterTableSchemas(t *testing.T) {
 			parentOnDeleteAction: deleteActionUndefined,
 			referencedBy:         nil,
 		}
+
+		// // The following tables are hierarchical schemas and not deleted in cascade.
+		t4 = &tableSchema{
+			tableName:            "t4",
+			parentTableName:      "",
+			parentOnDeleteAction: deleteActionUndefined,
+			referencedBy:         nil,
+		}
+		t5 = &tableSchema{
+			tableName:            "t5",
+			parentTableName:      "t4",
+			parentOnDeleteAction: deleteActionNoAction,
+			referencedBy:         nil,
+		}
+		t6 = &tableSchema{
+			tableName:            "t6",
+			parentTableName:      "t5",
+			parentOnDeleteAction: deleteActionNoAction,
+			referencedBy:         nil,
+		}
 	)
 
 	opts := []cmp.Option{
@@ -60,19 +101,35 @@ func TestTargetFilterTableSchemas(t *testing.T) {
 		want         []*tableSchema
 	}{
 		{
-			desc:         "Include multiple tables",
-			schemas:      []*tableSchema{t1, t2, t3},
-			targetTables: []string{t1.tableName, t2.tableName},
-			want:         []*tableSchema{t1, t2},
+			desc:         "Include descendants tables by tracing up to the bottommost level.",
+			schemas:      []*tableSchema{singers, albums, songs, t1, t2, t3},
+			targetTables: []string{singers.tableName},
+			want:         []*tableSchema{singers, albums, songs},
+		},
+		{
+			desc:         "Include only the lower levels without the higher levels.",
+			schemas:      []*tableSchema{singers, albums, songs, t1, t2, t3},
+			targetTables: []string{albums.tableName},
+			want:         []*tableSchema{albums, songs},
+		},
+		{
+			desc:         "Include multiple tables.",
+			schemas:      []*tableSchema{singers, albums, songs, t1, t2, t3},
+			targetTables: []string{singers.tableName, t1.tableName, t2.tableName},
+			want:         []*tableSchema{singers, albums, songs, t1, t2},
 		},
 		{
 			desc:         "Do nothing when no target tables are passed.",
-			schemas:      []*tableSchema{t1, t2, t3},
+			schemas:      []*tableSchema{singers, albums, songs, t1, t2, t3},
 			targetTables: nil,
-			want:         []*tableSchema{t1, t2, t3},
+			want:         []*tableSchema{singers, albums, songs, t1, t2, t3},
 		},
-		// TODO: Determine the specifications for parent-child relationships in hierarchical interleaved tables, and add corresponding tests and implementation.
-		// This includes defining the behavior of targetFilterTableSchemas for cases where tables not included in the target list are subject to cascade deletion.
+		{
+			desc:         "Do not include descendants tables that will not delete target tables in cascade.",
+			schemas:      []*tableSchema{singers, albums, songs, t4, t5, t6},
+			targetTables: []string{singers.tableName, t4.tableName},
+			want:         []*tableSchema{singers, albums, songs, t4},
+		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
 			got := targetFilterTableSchemas(test.schemas, test.targetTables)
@@ -166,7 +223,7 @@ func TestExcludeFilterTableSchemas(t *testing.T) {
 		want          []*tableSchema
 	}{
 		{
-			desc:          "Exclude the parent tables by tracing up to the topmost level.",
+			desc:          "Exclude ancestors tables by tracing up to the topmost level.",
 			schemas:       []*tableSchema{singers, albums, songs, t1, t2, t3},
 			excludeTables: []string{songs.tableName},
 			want:          []*tableSchema{t1, t2, t3},
@@ -190,7 +247,7 @@ func TestExcludeFilterTableSchemas(t *testing.T) {
 			want:          []*tableSchema{singers, albums, songs, t1, t2, t3},
 		},
 		{
-			desc:          "Do not exclude the parent tables that are not deleted in cascade.",
+			desc:          "Do not exclude ancestors tables that are not deleted in cascade.",
 			schemas:       []*tableSchema{singers, albums, songs, t4, t5, t6},
 			excludeTables: []string{songs.tableName, t6.tableName},
 			want:          []*tableSchema{t4, t5},
