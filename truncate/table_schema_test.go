@@ -101,7 +101,7 @@ func TestTargetFilterTableSchemas(t *testing.T) {
 		want         []*tableSchema
 	}{
 		{
-			desc:         "Include descendants tables by tracing up to the bottommost level.",
+			desc:         "Include descendants tables by tracing down to the bottommost level.",
 			schemas:      []*tableSchema{singers, albums, songs, t1, t2, t3},
 			targetTables: []string{singers.tableName},
 			want:         []*tableSchema{singers, albums, songs},
@@ -125,7 +125,7 @@ func TestTargetFilterTableSchemas(t *testing.T) {
 			want:         []*tableSchema{singers, albums, songs, t1, t2, t3},
 		},
 		{
-			desc:         "Do not include descendants tables that will not delete target tables in cascade.",
+			desc:         "Do not include descendants tables that will not be deleted in cascade.",
 			schemas:      []*tableSchema{singers, albums, songs, t4, t5, t6},
 			targetTables: []string{singers.tableName, t4.tableName},
 			want:         []*tableSchema{singers, albums, songs, t4},
