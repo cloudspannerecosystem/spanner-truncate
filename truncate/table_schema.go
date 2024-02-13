@@ -153,6 +153,7 @@ func filterTableSchemas(tables []*tableSchema, targetTables, excludeTables []str
 
 // targetFilterTableSchemas filters tables with given targetTables.
 // If targetTables is empty, it returns all tables.
+// When descendants tables of a target table are cascade deletable, they are also targeted to delete.
 func targetFilterTableSchemas(tables []*tableSchema, targetTables []string) []*tableSchema {
 	if len(targetTables) == 0 {
 		return tables
@@ -163,7 +164,17 @@ func targetFilterTableSchemas(tables []*tableSchema, targetTables []string) []*t
 		isTarget[t] = true
 	}
 
-	// TODO: Add child tables that may be deleted in cascade (#18)
+	// Additionally include descendants tables that may be deleted in cascade
+	lineages := constructTableLineages(tables)
+	for _, l := range lineages {
+		if isTarget[l.tableSchema.tableName] {
+			for _, d := range l.descendants {
+				if d.isCascadeDeletable() {
+					isTarget[d.tableName] = true
+				}
+			}
+		}
+	}
 
 	filtered := make([]*tableSchema, 0, len(tables))
 	for _, t := range tables {
@@ -177,7 +188,7 @@ func targetFilterTableSchemas(tables []*tableSchema, targetTables []string) []*t
 
 // excludeFilterTableSchemas filters tables with given excludeTables.
 // If excludeTables is empty, it returns all tables.
-// When an exclude table is cascade deletable, its parent table is also excluded.
+// When an exclude table is cascade deletable, its ancestors tables are also excluded.
 func excludeFilterTableSchemas(tables []*tableSchema, excludeTableSchemas []string) []*tableSchema {
 	if len(excludeTableSchemas) == 0 {
 		return tables
@@ -188,7 +199,7 @@ func excludeFilterTableSchemas(tables []*tableSchema, excludeTableSchemas []stri
 		isExclude[t] = true
 	}
 
-	// Additionally exclude parent tables that may delete the exclude tables in cascade
+	// Additionally exclude ancestors tables that may delete the exclude tables in cascade
 	lineages := constructTableLineages(tables)
 	for _, l := range lineages {
 		if isExclude[l.tableSchema.tableName] && l.tableSchema.isCascadeDeletable() {
