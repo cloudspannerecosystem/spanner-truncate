@@ -52,8 +52,8 @@ Application Options:
   -i, --instance= (required) Cloud Spanner Instance ID. [$SPANNER_INSTANCE_ID]
   -d, --database= (required) Cloud Spanner Database ID. [$SPANNER_DATABASE_ID]
   -q, --quiet     Disable all interactive prompts.
-  -t, --tables=   Comma separated table names to be truncated. Default to truncate all tables if not specified.
-  -e, --exclude-tables Comma separated table names to be exempted from truncating. 'tables' and 'exclude-tables' cannot co-exist. If interleaved tables are specified, the parent table is also excluded.
+  -t, --tables=   Comma separated table names to be truncated. Default to truncate all tables if not specified. If an interleaved table is specified, its descendants tables are also truncated.
+  -e, --exclude-tables Comma separated table names to be exempted from truncating. 'tables' and 'exclude-tables' cannot co-exist. If an interleaved table is specified, its ancestors tables are also excluded.
 Help Options:
   -h, --help      Show this help message
 ```
