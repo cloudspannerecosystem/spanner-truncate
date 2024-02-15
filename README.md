@@ -34,6 +34,7 @@ To solve the preceding issues, this tool works as follows.
 
 * This tool does not guarantee the atomicity of deletion. If you access the rows that are being deleted, you will get the inconsistent view of the database.
 * This tool does not delete rows which were inserted while the tool was running.
+* This tool does not support scenarios involving foreign key constraints with 'ON DELETE CASCADE' in cases where there is a circular dependency among the tables. As a result, it may not be able to truncate the tables.
 
 ## Install
 
